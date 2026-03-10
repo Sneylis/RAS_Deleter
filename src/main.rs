@@ -208,7 +208,25 @@ impl Config {
             .position(|a| a == "--log-dir")
             .and_then(|i| args.get(i + 1))
             .map(PathBuf::from)
-            .unwrap_or_else(|| PathBuf::from(r"C:\ProgramData\RASRemover\Logs"));
+            .unwrap_or_else(|| {
+                // Try to use ProgramData (requires admin), fallback to local AppData
+                let program_data_logs = PathBuf::from(r"C:\ProgramData\Logs\RAS_Remover");
+
+                // Check if we can write to ProgramData
+                if program_data_logs.parent().map_or(false, |p| p.exists()) {
+                    program_data_logs
+                } else {
+                    // Fallback to AppData\Local for non-admin users
+                    if let Ok(appdata) = env::var("APPDATA") {
+                        PathBuf::from(appdata).join("RAS_Remover\\Logs")
+                    } else if let Ok(local_appdata) = env::var("LOCALAPPDATA") {
+                        PathBuf::from(local_appdata).join("RAS_Remover\\Logs")
+                    } else {
+                        // Last resort: use temp directory
+                        env::temp_dir().join("RAS_Remover_Logs")
+                    }
+                }
+            });
 
         let target_tool = args
             .iter()
