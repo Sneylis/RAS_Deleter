@@ -31,6 +31,9 @@ use std::time::Duration;
 use chrono::Local;
 use sysinfo::{ProcessRefreshKind, RefreshKind, System};
 
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
+
 // ===========================================================================
 // Windows API — скрытие консольного окна
 // ===========================================================================
@@ -54,6 +57,25 @@ fn hide_console_window() {
 
 #[cfg(not(windows))]
 fn hide_console_window() {}
+
+// ===========================================================================
+// Helper для скрытия окон дочерних процессов (Windows)
+// ===========================================================================
+
+/// Создать Command с флагом для скрытия окна консоли (Windows only)
+#[cfg(windows)]
+fn create_hidden_command(program: &str) -> Command {
+    const CREATE_NO_WINDOW: u32 = 0x08000000;
+    let mut cmd = Command::new(program);
+    cmd.creation_flags(CREATE_NO_WINDOW);
+    cmd
+}
+
+/// На других платформах просто создаём обычный Command
+#[cfg(not(windows))]
+fn create_hidden_command(program: &str) -> Command {
+    Command::new(program)
+}
 
 // ===========================================================================
 // Проверка прав администратора
@@ -631,7 +653,7 @@ fn find_running_processes(process_names: &[&str], sys: &System) -> Vec<(u32, Pat
 
 /// Проверка существования сервиса
 fn service_exists(service_name: &str) -> bool {
-    if let Ok(output) = Command::new("sc").args(["query", service_name]).output() {
+    if let Ok(output) = create_hidden_command("sc").args(["query", service_name]).output() {
         let stdout = String::from_utf8_lossy(&output.stdout);
         stdout.contains(service_name) && !stdout.contains("1060")
     } else {
@@ -768,11 +790,11 @@ fn kill_processes_by_names(
     log.info("Завершаем процессы...");
 
     if !dry_run {
-        let _ = Command::new("sc").args(["stop", "AnyDesk"]).output();
+        let _ = create_hidden_command("sc").args(["stop", "AnyDesk"]).output();
         thread::sleep(Duration::from_secs(2));
 
         for proc_name in process_names {
-            let _ = Command::new("taskkill")
+            let _ = create_hidden_command("taskkill")
                 .args(["/F", "/IM", proc_name, "/T"])
                 .output();
         }
@@ -840,10 +862,10 @@ fn remove_services(
         log.info(&format!("Удаляю службу: {}", service));
 
         if !dry_run {
-            let _ = Command::new("sc").args(["stop", service]).output();
+            let _ = create_hidden_command("sc").args(["stop", service]).output();
             thread::sleep(Duration::from_millis(500));
 
-            if let Ok(o) = Command::new("sc").args(["delete", service]).output() {
+            if let Ok(o) = create_hidden_command("sc").args(["delete", service]).output() {
                 if o.status.success() {
                     log.ok(&format!("Служба удалена: {}", service));
                     deleted.push(service.to_string());
@@ -904,7 +926,7 @@ fn remove_paths(
                     format!("del /f /q \"{}\"", path.display())
                 };
 
-                let _ = Command::new("cmd").args(["/C", &arg]).output();
+                let _ = create_hidden_command("cmd").args(["/C", &arg]).output();
 
                 if !path.exists() {
                     log.ok(&format!("Удалено через cmd: {}", path.display()));
@@ -981,7 +1003,7 @@ fn clean_firewall_rules(
     if !dry_run {
         for rule_name in rule_names {
             for direction in ["in", "out"] {
-                let _ = Command::new("netsh")
+                let _ = create_hidden_command("netsh")
                     .args([
                         "advfirewall",
                         "firewall",
@@ -1415,7 +1437,7 @@ fn remove_portable_files(
         ));
 
         // Убить процесс если запущен
-        let _ = Command::new("taskkill")
+        let _ = create_hidden_command("taskkill")
             .args(["/F", "/IM", &file_name, "/T"])
             .output();
         thread::sleep(Duration::from_millis(500));
@@ -1429,7 +1451,7 @@ fn remove_portable_files(
                     log.warn(&format!("Прямое удаление не сработало: {}. Пробую cmd...", e));
 
                     let arg = format!("del /f /q \"{}\"", portable.exe_path.display());
-                    let _ = Command::new("cmd").args(["/C", &arg]).output();
+                    let _ = create_hidden_command("cmd").args(["/C", &arg]).output();
 
                     if !portable.exe_path.exists() {
                         log.ok(&format!("Удалено через cmd: {}", portable.exe_path.display()));
