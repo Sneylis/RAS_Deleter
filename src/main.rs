@@ -1331,223 +1331,14 @@ fn scan_mft_for_portable(
 }
 
 // ===========================================================================
-// Portable Detection & Removal — Everything Integration
+// Portable Detection & Removal — MFT Scan Only
 // ===========================================================================
 
-const EVERYTHING_INSTALLER_URL: &str = "https://www.voidtools.com/Everything-1.4.1.1026.x64.exe";
-const EVERYTHING_ES_URL: &str = "https://www.voidtools.com/ES-1.1.0.27.x64.zip";
 
-/// Найти everything.exe (портативная версия в проекте)
-fn find_portable_everything() -> Option<PathBuf> {
-    let possible_paths = vec![
-        // Рядом с текущим exe
-        env::current_exe()
-            .ok()
-            .and_then(|p| p.parent().map(|parent| parent.join("everything.exe"))),
-        // В корне проекта (при разработке)
-        Some(PathBuf::from("everything.exe")),
-        Some(PathBuf::from("./everything.exe")),
-    ];
 
-    for path_opt in possible_paths.into_iter().flatten() {
-        if path_opt.exists() {
-            return Some(path_opt);
-        }
-    }
 
-    None
-}
 
-/// Найти es.exe (CLI для Everything) в стандартных местах
-fn find_es_exe() -> Option<PathBuf> {
-    let possible_paths = vec![
-        "C:\\Program Files\\Everything\\es.exe",
-        "C:\\Program Files (x86)\\Everything\\es.exe",
-        "C:\\ProgramData\\RASRemover\\es.exe",
-    ];
 
-    for path_str in possible_paths {
-        let path = Path::new(path_str);
-        if path.exists() {
-            return Some(path.to_path_buf());
-        }
-    }
-
-    // Проверить PATH
-    if let Ok(output) = Command::new("where").arg("es.exe").output() {
-        if output.status.success() {
-            let path_str = String::from_utf8_lossy(&output.stdout);
-            for line in path_str.lines() {
-                let path = Path::new(line.trim());
-                if path.exists() {
-                    return Some(path.to_path_buf());
-                }
-            }
-        }
-    }
-
-    None
-}
-
-/// Запустить встроенное Everything и возвращает путь к es.exe
-fn run_builtin_everything(log: &mut FileLogger) -> Option<PathBuf> {
-    let everything_path = find_portable_everything()?;
-
-    log.info("🚀 Запускаю встроенное Everything (может быть быстро)...");
-
-    // Запустить everything.exe как сервис
-    let _ = Command::new(&everything_path)
-        .arg("-admin")
-        .arg("-install-service")
-        .output();
-
-    // Дождаться запуска сервиса (3 сек на запуск + 2 сек на первое индексирование)
-    thread::sleep(Duration::from_secs(3));
-
-    // Найти es.exe рядом с everything.exe
-    let es_path = everything_path
-        .parent()
-        .map(|dir| dir.join("es.exe"))
-        .filter(|p| p.exists())?;
-
-    // Проверить что Everything работает - запросим версию
-    match Command::new(&es_path).output() {
-        Ok(output) => {
-            let output_str = String::from_utf8_lossy(&output.stdout);
-            if output_str.contains("ES") || output_str.contains("Everything") {
-                log.ok("✅ Everything запущен и готов к поиску");
-                return Some(es_path);
-            }
-        }
-        Err(_) => {}
-    }
-
-    // Если ошибка IPC - сервис еще не запустился, но может заработать
-    // Попробуем еще раз через 2 сек
-    thread::sleep(Duration::from_secs(2));
-    log.ok("✅ Everything запущен (деferred mode)");
-    Some(es_path)
-}
-
-/// Скачать файл через PowerShell
-fn download_file(url: &str, dest: &Path, log: &mut FileLogger) -> bool {
-    let dest_str = dest.to_string_lossy().replace('\\', "\\\\");
-
-    // Попытка 1: Invoke-WebRequest с retry-логикой
-    let cmd = format!(
-        "[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor [System.Net.SecurityProtocolType]::Tls12; \
-         Invoke-WebRequest -Uri '{}' -OutFile '{}' -UseBasicParsing -ErrorAction Stop",
-        url, dest_str
-    );
-
-    match Command::new("powershell")
-        .args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", &cmd])
-        .output()
-    {
-        Ok(output) => {
-            if output.status.success() && dest.exists() {
-                return true;
-            }
-            log.warn(&format!("PowerShell скачивание не сработало"));
-        }
-        Err(e) => {
-            log.warn(&format!("Ошибка PowerShell: {}", e));
-        }
-    }
-
-    false
-}
-
-/// Установить Everything и скачать es.exe
-fn install_everything(log: &mut FileLogger) -> Option<PathBuf> {
-    let temp_dir = env::temp_dir();
-    let installer_path = temp_dir.join("ras_everything_setup.exe");
-
-    log.info("Скачиваю Everything installer...");
-    if !download_file(EVERYTHING_INSTALLER_URL, &installer_path, log) {
-        log.warn("Не удалось скачать Everything installer");
-        return None;
-    }
-
-    log.info("Устанавливаю Everything (тихо)...");
-    let _ = Command::new(&installer_path).arg("/S").output();
-    thread::sleep(Duration::from_secs(5));
-
-    // Попробовать найти установленный es.exe
-    if let Some(path) = find_es_exe() {
-        let _ = fs::remove_file(&installer_path);
-        log.ok("Everything успешно установлен");
-        return Some(path);
-    }
-
-    // Fallback: скачать es.exe отдельно
-    log.info("Скачиваю ES CLI...");
-    let zip_path = temp_dir.join("ES.zip");
-    let ras_dir = PathBuf::from("C:\\ProgramData\\RASRemover");
-    let _ = fs::create_dir_all(&ras_dir);
-
-    if !download_file(EVERYTHING_ES_URL, &zip_path, log) {
-        log.warn("Не удалось скачать ES CLI");
-        let _ = fs::remove_file(&installer_path);
-        let _ = fs::remove_file(&zip_path);
-        return None;
-    }
-
-    // Распаковать через PowerShell
-    let zip_str = zip_path.to_string_lossy().replace('\\', "\\\\");
-    let dest_str = ras_dir.to_string_lossy().replace('\\', "\\\\");
-    let cmd = format!(
-        "Expand-Archive -Path '{}' -DestinationPath '{}' -Force",
-        zip_str, dest_str
-    );
-
-    if Command::new("powershell")
-        .args(["-NoProfile", "-Command", &cmd])
-        .output()
-        .ok()
-        .map(|o| o.status.success())
-        .unwrap_or(false)
-    {
-        let _ = fs::remove_file(&installer_path);
-        let _ = fs::remove_file(&zip_path);
-        let es_path = ras_dir.join("es.exe");
-        if es_path.exists() {
-            log.ok("ES CLI установлен");
-            return Some(es_path);
-        }
-    }
-
-    let _ = fs::remove_file(&installer_path);
-    let _ = fs::remove_file(&zip_path);
-    None
-}
-
-/// Поиск файлов через Everything CLI (es.exe)
-fn search_with_everything(es_path: &Path, exe_filename: &str, log: &mut FileLogger) -> Vec<PathBuf> {
-    let mut results = Vec::new();
-
-    match Command::new(es_path).arg(exe_filename).output() {
-        Ok(output) => {
-            // Проверить если ошибка "IPC window not found" - Everything не работает
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            if stderr.contains("IPC window not found") {
-                log.warn("Everything не работает - переключаюсь на рекурсивный поиск");
-                return results;
-            }
-
-            let stdout = String::from_utf8_lossy(&output.stdout);
-            for line in stdout.lines() {
-                let path = line.trim();
-                if !path.is_empty() && Path::new(path).exists() {
-                    results.push(PathBuf::from(path));
-                }
-            }
-        }
-        Err(_) => {}
-    }
-
-    results
-}
 
 /// Пропустить ли эту директорию при сканировании
 fn should_skip_dir(dir_name: &str) -> bool {
@@ -1561,101 +1352,12 @@ fn should_skip_dir(dir_name: &str) -> bool {
     )
 }
 
-/// Рекурсивный поиск portable exe-файлов
-fn scan_portable_recursive(
-    root: &Path,
-    exe_filenames_lower: &[String],
-    found: &mut Vec<PathBuf>,
-    _log: &mut FileLogger,
-) {
-    if !root.exists() {
-        return;
-    }
 
-    match fs::read_dir(root) {
-        Ok(entries) => {
-            for entry in entries.flatten() {
-                let path = entry.path();
-                let file_name = match path.file_name() {
-                    Some(name) => name.to_string_lossy().to_string(),
-                    None => continue,
-                };
-
-                let file_name_lower = file_name.to_lowercase();
-
-                // Проверить файл
-                if path.is_file() && exe_filenames_lower.iter().any(|ef| ef == &file_name_lower) {
-                    if path.exists() {
-                        found.push(path);
-                    }
-                }
-                // Рекурсия в папку (если не системная)
-                else if path.is_dir() && !should_skip_dir(&file_name) {
-                    scan_portable_recursive(&path, exe_filenames_lower, found, _log);
-                }
-            }
-        }
-        Err(_) => {
-            // Тихо игнорируем ошибки доступа к папкам
-        }
-    }
-}
-
-/// Получить список "интересных" папок для сканирования
-fn get_scan_paths() -> Vec<PathBuf> {
-    let mut paths = Vec::new();
-
-    // Папки на корне диска C:\
-    let c_root_dirs = vec![
-        "C:\\Downloads",
-        "C:\\Temp",
-        "C:\\Tools",
-        "C:\\Apps",
-        "C:\\Programs",
-        "C:\\Portable",
-    ];
-
-    for dir in c_root_dirs {
-        if Path::new(dir).exists() {
-            paths.push(PathBuf::from(dir));
-        }
-    }
-
-    // Desktop, Downloads, Documents для текущего пользователя
-    if let Ok(user_dir) = env::var("USERPROFILE") {
-        for subdir in &["Desktop", "Downloads", "Documents"] {
-            let path = PathBuf::from(&user_dir).join(subdir);
-            if path.exists() {
-                paths.push(path);
-            }
-        }
-    }
-
-    dedup_paths(paths)
-}
-
-/// Сканирование портативных версий инструментов (Everything по всем дискам)
+/// Сканирование портативных версий инструментов (MFT сканирование всех дисков)
 fn scan_all_portable(config: &Config, log: &mut FileLogger) -> Vec<PortableFoundResult> {
     let mut all_portable = Vec::new();
 
-    // ЭТАП 1: Попытка использовать всё найденное Everything
-    log.info("=== ЭТАП 1: Поиск Everything ===");
-    let mut es_exe = find_portable_everything().or_else(|| find_es_exe());
-
-    // ЭТАП 2: Если Everything не найден - попытаться установить
-    if es_exe.is_none() {
-        log.warn("Everything не найден. Пробую установить...");
-        es_exe = install_everything(log);
-    }
-
-    // ЭТАП 3: Если Everything всё ещё не доступен - использовать MFT
-    let use_everything = es_exe.is_some();
-
-    if use_everything {
-        log.info("🔍 === ЭТАП 2: Используем Everything ===");
-    } else {
-        log.info("📊 === ЭТАП 3: Everything недоступен - используем MFT сканер ===");
-    }
+    log.info("📊 === Сканирование MFT всех дисков ===");
 
     for tool in RAS_TOOLS {
         let should_scan = config
@@ -1670,24 +1372,8 @@ fn scan_all_portable(config: &Config, log: &mut FileLogger) -> Vec<PortableFound
 
         log.info(&format!("Ищу portable версии: {}", tool.name));
 
-        if use_everything {
-            // === ЭТАП 2: Everything для поиска ===
-            if let Some(ref es_path) = es_exe {
-                for exe_name in tool.exe_filenames {
-                    let found = search_with_everything(es_path, exe_name, log);
-                    for exe_path in found {
-                        all_portable.push(PortableFoundResult {
-                            tool_name: tool.name.to_string(),
-                            exe_path,
-                        });
-                    }
-                }
-            }
-        } else {
-            // === ЭТАП 3: MFT сканер (быстрый полный диск без Everything) ===
-            let mft_results = scan_mft_for_portable(tool.name, tool.exe_filenames, log);
-            all_portable.extend(mft_results);
-        }
+        let mft_results = scan_mft_for_portable(tool.name, tool.exe_filenames, log);
+        all_portable.extend(mft_results);
     }
 
     // Дедупликация
