@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cargo build:*)",
+      "Bash(cargo check:*)",
+      "Bash(./target/release/ras_del.exe --dry-run --silent)"
+    ]
+  }
+}
