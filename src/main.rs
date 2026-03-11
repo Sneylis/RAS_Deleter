@@ -1,6 +1,6 @@
 //! RAS Remover v2.0.0 — утилита для полного удаления популярных Remote Access Software
 //!
-//! Поддерживаемые инструменты (18 штук):
+//! Поддерживаемые инструменты (17 штук):
 //!   1. AnyDesk
 //!   2. TeamViewer
 //!   3. Chrome Remote Desktop
@@ -18,7 +18,6 @@
 //!   15. Radmin
 //!   16. RustDesk
 //!   17. Assistant FS
-//!   18. RUT View
 //!
 //! Запуск: ras_remover.exe [--silent] [--dry-run] [--log-dir C:\Logs] [--tool "AnyDesk"]
 
@@ -486,7 +485,7 @@ static RAS_TOOLS: &[RasTool] = &[
         firewall_rule_names: &["RustDesk"],
         silent_args: &["--uninstall"],
     },
-    // 17. Assistant FS
+    // 17. Assistant FS (last tool)
     RasTool {
         name: "Assistant FS",
         process_names: &["assistant_fs.exe"],
@@ -495,17 +494,6 @@ static RAS_TOOLS: &[RasTool] = &[
         exe_filenames: &["assistant_fs.exe"],
         appdata_dirs: &["Assistant", "AssistantFS"],
         firewall_rule_names: &["Assistant FS", "Assistant"],
-        silent_args: &["/S", "/quiet"],
-    },
-    // 18. RUT View
-    RasTool {
-        name: "RUT View",
-        process_names: &["rutview.exe", "rutserver.exe"],
-        service_names: &["RUTView", "RUTServer"],
-        registry_display_names: &["rutview"],
-        exe_filenames: &["rutview.exe", "rutserver.exe"],
-        appdata_dirs: &["RUT View", "RUTView"],
-        firewall_rule_names: &["RUT View"],
         silent_args: &["/S", "/quiet"],
     },
 ];
