@@ -6,9 +6,7 @@
 
 **RAS Remover** — это Rust-приложение для удаления популярных инструментов удалённого доступа (RAS) с Windows-систем. Программа использует встроенное сканирование Master File Table (MFT) NTFS для эффективного поиска файлов на все NTFS-томах без внешних зависимостей.
 
-Программа поставляется в двух форматах:
-- **ras_del.exe** — основной исполняемый файл
-- **RAST_Remover.exe** — самораспаковывающийся архив, запускает `ras_del.exe --silent -log-dir "%LOCALAPPDATA%\"`
+Основной исполняемый файл: **ras_del.exe**
 
 ## Поддерживаемые RAS (15 инструментов)
 
@@ -59,21 +57,7 @@
 
 ## Использование
 
-### Запуск через RAST_Remover.exe (рекомендуется)
-
-```cmd
-RAST_Remover.exe
-```
-
-Самораспаковывающийся архив автоматически:
-1. Распакует содержимое во временную папку
-2. Запустит `ras_del.exe --silent -log-dir "%LOCALAPPDATA%\"`
-3. Сохранит логи в `%LOCALAPPDATA%\ras_remover_*.log`
-4. Очистит временные файлы
-
-### Прямое использование ras_del.exe
-
-#### Базовые команды
+### Базовые команды
 
 ```cmd
 REM Удалить все обнаруженные RAS (требуются права администратора)
@@ -100,8 +84,8 @@ REM Комбинировать несколько флагов
 ras_del.exe --dry-run --log-dir C:\Logs --silent
 ras_del.exe --tool "Chrome Remote Desktop" --dry-run
 
-REM Удалить с логами в AppData (как RAST_Remover.exe)
-ras_del.exe --silent -log-dir "%LOCALAPPDATA%\"
+REM Удалить с логами в AppData
+ras_del.exe --silent --log-dir "%LOCALAPPDATA%\RAS_Remover\Logs"
 ```
 
 ## Флаги программы
@@ -137,7 +121,7 @@ ras_del.exe --log-dir "C:\ProgramData\Logs\RAS_Remover"
 |---|------|---------|-----------|
 | 1 | `C:\ProgramData\Logs\RAS_Remover` | Развёртывание администратором | Подходит для GPO и MDM |
 | 2 | `%APPDATA%\RAS_Remover\Logs` | Стандартный пользовательский путь | Роaming profile |
-| 3 | `%LOCALAPPDATA%\RAS_Remover\Logs` | Локальный пользовательский путь | Используется RAST_Remover.exe |
+| 3 | `%LOCALAPPDATA%\RAS_Remover\Logs` | Локальный пользовательский путь | Для локальных пользователей |
 | 4 | Temp-папка Windows | Резервный вариант | Если выше недоступно |
 
 ### Явное указание пути
@@ -293,10 +277,6 @@ A:
 3. Запустите программу снова
 4. Если не помогает — проверьте права админа и занятые файлы
 
-**Q: В чём отличие RAST_Remover.exe от ras_del.exe?**
-A: Функционально одинаково. Различие:
-- `RAST_Remover.exe` — это SFX архив, удобнее для распределения
-- `ras_del.exe` — основной файл, для более точного управления
 
 **Q: Может ли программа восстановить удаленное?**
 A: Нет. После удаления требуется переустановка.
@@ -328,7 +308,6 @@ A: Да. MFT сканирование найдёт файлы даже если 
 
 ### Размер
 - **ras_del.exe:** ~463 KB (Release build)
-- **RAST_Remover.exe:** ~3.2 MB (с архивом)
 
 ### Зависимости
 Нет внешних зависимостей. Всё встроено в бинарь.
@@ -352,7 +331,6 @@ A: Да. MFT сканирование найдёт файлы даже если 
 - ✓ Парсинг UninstallString без cmd.exe ошибок
 - ✓ Дедупликация путей (case-insensitive)
 - ✓ Fallback стратегия для удаления блокированных файлов
-- ✓ Самораспаковывающийся архив RAST_Remover.exe
 
 ## Лицензия
 
@@ -363,5 +341,5 @@ MIT
 Для сообщения об ошибках, предложений или вопросов проверьте логи в:
 - `C:\ProgramData\Logs\RAS_Remover\ras_remover_*.log` (если развёрнуто админом)
 - `%APPDATA%\RAS_Remover\Logs\ras_remover_*.log` (пользовательский путь)
-- `%LOCALAPPDATA%\RAS_Remover\Logs\ras_remover_*.log` (RAST_Remover.exe)
+- `%LOCALAPPDATA%\RAS_Remover\Logs\ras_remover_*.log` (локальный путь пользователя)
 - Или в папке, указанной флагом `--log-dir`
