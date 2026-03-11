@@ -8,7 +8,7 @@
 
 Основной исполняемый файл: **ras_del.exe**
 
-## Поддерживаемые RAS (15 инструментов)
+## Поддерживаемые RAS (18 инструментов)
 
 | # | Инструмент | Процесс | Служба | Особенности |
 |---|-----------|---------|--------|-----------|
@@ -27,6 +27,9 @@
 | 13 | **GoToMyPC** | g2mstart.exe | GoToMyPC | HKCU установка |
 | 14 | **Zoho Assist** | zohotray.exe | ZohoAssist | Per-user размещение |
 | 15 | **Radmin** | radmin.exe | Radmin | Требует полного удаления |
+| 16 | **RustDesk** | rustdesk.exe | RustDesk | Аналог AnyDesk с открытым кодом |
+| 17 | **Assistant FS** | assistant_fs.exe | AssistantFS | Удалённая поддержка |
+| 18 | **RUT View** | rutview.exe | RUTView | Embedded remote access |
 
 ## Ключевые возможности
 
@@ -72,6 +75,8 @@ ras_del.exe --silent
 REM Удалить только конкретный инструмент
 ras_del.exe --tool AnyDesk
 ras_del.exe --tool TeamViewer
+ras_del.exe --tool RustDesk
+ras_del.exe --tool "Assistant FS"
 ```
 
 #### Расширённые опции

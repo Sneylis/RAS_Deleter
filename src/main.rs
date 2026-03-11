@@ -1,6 +1,6 @@
 //! RAS Remover v2.0.0 — утилита для полного удаления популярных Remote Access Software
 //!
-//! Поддерживаемые инструменты (15 штук):
+//! Поддерживаемые инструменты (18 штук):
 //!   1. AnyDesk
 //!   2. TeamViewer
 //!   3. Chrome Remote Desktop
@@ -16,6 +16,9 @@
 //!   13. GoToMyPC / GoTo Resolve
 //!   14. Zoho Assist
 //!   15. Radmin
+//!   16. RustDesk
+//!   17. Assistant FS
+//!   18. RUT View
 //!
 //! Запуск: ras_remover.exe [--silent] [--dry-run] [--log-dir C:\Logs] [--tool "AnyDesk"]
 
@@ -303,7 +306,7 @@ struct PortableFoundResult {
 }
 
 // ===========================================================================
-// RAS Tools Table — 15 популярных инструментов удалённого доступа
+// RAS Tools Table — 18 популярных инструментов удалённого доступа
 // ===========================================================================
 
 static RAS_TOOLS: &[RasTool] = &[
@@ -470,6 +473,39 @@ static RAS_TOOLS: &[RasTool] = &[
         exe_filenames: &["Radmin.exe", "rserver3.exe"],
         appdata_dirs: &["Radmin", "Famatech"],
         firewall_rule_names: &["Radmin", "Famatech"],
+        silent_args: &["/S", "/quiet"],
+    },
+    // 16. RustDesk
+    RasTool {
+        name: "RustDesk",
+        process_names: &["rustdesk.exe", "rustdesk-ipc.exe", "hbbr.exe", "hbbs.exe"],
+        service_names: &["RustDesk", "rustdesk"],
+        registry_display_names: &["rustdesk"],
+        exe_filenames: &["RustDesk.exe", "rustdesk.exe"],
+        appdata_dirs: &["RustDesk"],
+        firewall_rule_names: &["RustDesk"],
+        silent_args: &["--uninstall"],
+    },
+    // 17. Assistant FS
+    RasTool {
+        name: "Assistant FS",
+        process_names: &["assistant_fs.exe"],
+        service_names: &["AssistantFS", "Assistant"],
+        registry_display_names: &["assistant"],
+        exe_filenames: &["assistant_fs.exe"],
+        appdata_dirs: &["Assistant", "AssistantFS"],
+        firewall_rule_names: &["Assistant FS", "Assistant"],
+        silent_args: &["/S", "/quiet"],
+    },
+    // 18. RUT View
+    RasTool {
+        name: "RUT View",
+        process_names: &["rutview.exe", "rutserver.exe"],
+        service_names: &["RUTView", "RUTServer"],
+        registry_display_names: &["rutview"],
+        exe_filenames: &["rutview.exe", "rutserver.exe"],
+        appdata_dirs: &["RUT View", "RUTView"],
+        firewall_rule_names: &["RUT View"],
         silent_args: &["/S", "/quiet"],
     },
 ];
